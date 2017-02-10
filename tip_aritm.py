@@ -8,6 +8,7 @@ class Ar(enum.Enum):
     PLUS = '+'
     MINUS = '-'
     PUTA = '*'
+    POTENCIJA = '^'
     OTVORENA = '('
     ZATVORENA = ')'
 
@@ -26,7 +27,7 @@ def aritm_lex(izraz):
         elif vr == 'znamenka':
             yield Token(Ar.BROJ, lex.broj())
             minus_operator = True
-        elif znak in '+*(':
+        elif znak in '+*(^':
             yield Token(Ar(znak), lex.čitaj())
             minus_operator = False
         elif znak == '-':
@@ -59,11 +60,27 @@ class AritmParser(Parser):
             return č1
 
     def član(self):
-        f1 = self.faktor()
-        dalje = self.granaj(Ar.KRAJ, Ar.PUTA, Ar.PLUS, Ar.MINUS, Ar.ZATVORENA)
+        f1 = self.potenciranje()
+        dalje = self.granaj(Ar.KRAJ, Ar.PUTA, Ar.PLUS, Ar.MINUS, Ar.ZATVORENA, Ar.OTVORENA)
         if dalje == Ar.PUTA:
             self.pročitaj(Ar.PUTA)
             f2 = self.član()
+            return AST(stablo='umnožak', lijevo=f2, desno=f1)
+        else:
+            return f1
+
+    def potenciranje(self):
+        f1 = self.faktor()
+        dalje = self.granaj(Ar.KRAJ, Ar.POTENCIJA, Ar.PUTA, Ar.PLUS, Ar.MINUS, Ar.ZATVORENA, Ar.OTVORENA, Ar.BROJ)
+        if dalje == Ar.POTENCIJA:
+            self.pročitaj(Ar.POTENCIJA)
+            f2 = self.potenciranje()
+            return AST(stablo='potenciranje', lijevo=f2, desno=f1)
+        elif dalje == Ar.BROJ:
+            f2 = self.potenciranje()
+            return AST(stablo='umnožak', lijevo=f2, desno=f1)
+        elif dalje == Ar.OTVORENA:
+            f2 = self.potenciranje()
             return AST(stablo='umnožak', lijevo=f2, desno=f1)
         else:
             return f1
@@ -100,11 +117,16 @@ def vrijednost(fragment):
         if fragment.stablo == 'zbroj': return l + d
         elif fragment.stablo == 'razlika': return l - d
         elif fragment.stablo == 'umnožak': return l * d
+        elif fragment.stablo == 'potenciranje': return l ** d
 
 
 def testiraj(izraz):
     mi = vrijednost(aritm_parse(izraz))
-    Python = eval(izraz)
+    try:
+        Python = eval(izraz)
+    except Exception as e:
+        Python = "nezna"
+    #Python = eval(izraz)
     if mi == Python:
         print(izraz, '==', mi, 'OK')
     else:
@@ -112,6 +134,25 @@ def testiraj(izraz):
 
 
 if __name__ == '__main__':
-    testiraj('(2+3)*4-1')
+    testiraj('(2+3)*(4-1)')
     testiraj('6-1-3')
     testiraj('-2+-3--2*(-2+3)-1')
+    testiraj('-2-2*2-2')
+    testiraj('(-2+-3--2)(-2+3)')
+    testiraj('(-2)(-2+3)')
+    testiraj('(2)(-2+3)')
+    testiraj('(0)(-2+3)')
+    testiraj('(3*2)(-2)')
+    testiraj('(3*2)(4*2)')
+    testiraj('(3*2)(4+2)')
+    testiraj('(3+2)(4*2)')
+    testiraj('(3+2)(4+2)')
+    testiraj('3^1')
+    testiraj('(3^2)')
+    testiraj('(3^2)(4^2)')
+    testiraj('(3^2)^(4^2)')
+    testiraj('1*2^8')
+    testiraj('1*2^3+4(5+6)')
+    testiraj('3*6^8+6(12+3)')
+    # Provjeriti da li postoji broj kad citamo - kao ne operator?!
+    #testiraj('3+-')
